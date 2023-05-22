@@ -45,9 +45,8 @@ abstract public class BaseCommand {
         try (OutputStream stream = Files.newOutputStream(file.toPath())) {
             stream.write(data);
         }
-        em.setImage("attachment://filename.png");
-        File initialFile = new File("src/main/resources/sample.txt");
-        ev.getChannel().sendFiles(FileUpload.fromData(initialFile, "filename.png")).setEmbeds(em.build()).queue();
+        ev.getChannel().sendFiles(FileUpload.fromData(file)).queue();
+        ev.getChannel().sendMessageEmbeds(em.build()).queue();
         file.getAbsoluteFile().setWritable(true);
         while(!file.getAbsoluteFile().delete());
     }
