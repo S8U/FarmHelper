@@ -141,6 +141,8 @@ public class Failsafe {
             frustum.setPosition(mc.getRenderViewEntity().posX, mc.getRenderViewEntity().posY, mc.getRenderViewEntity().posZ);
             if (frustum.isBoundingBoxInFrustum(new AxisAlignedBB(dirtToCheck.getX(), dirtToCheck.getY(), dirtToCheck.getZ(), dirtToCheck.getX() + 1, dirtToCheck.getY() + 1, dirtToCheck.getZ() + 1))) {
                 emergencyFailsafe(FailsafeType.DIRT);
+                dirtCheck.reset();
+                dirtToCheck = null;
             }
             if (dirtCheck.isScheduled() && dirtCheck.passed()) {
                 dirtToCheck = null;
@@ -547,7 +549,8 @@ public class Failsafe {
                 }
             }
             LogUtils.scriptLog("Stop the macro if you see this!");
-            PlayerUtils.setSpawn();
+            if (FarmConfig.ladderDesign)
+                PlayerUtils.setSpawn();
             Thread.sleep(3000);
             if(Math.random() < 0.5d) {
                 mc.thePlayer.sendChatMessage("/hub");

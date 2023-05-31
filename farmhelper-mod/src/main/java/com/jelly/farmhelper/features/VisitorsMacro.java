@@ -2,6 +2,7 @@ package com.jelly.farmhelper.features;
 
 import com.jelly.farmhelper.FarmHelper;
 import com.jelly.farmhelper.config.ConfigHandler;
+import com.jelly.farmhelper.config.interfaces.FarmConfig;
 import com.jelly.farmhelper.config.interfaces.MiscConfig;
 import com.jelly.farmhelper.macros.MacroHandler;
 import com.jelly.farmhelper.player.Rotation;
@@ -190,6 +191,12 @@ public class VisitorsMacro {
             return;
         } else if (clock.passed()) {
             clock.reset();
+        }
+
+        if (!FarmConfig.ladderDesign) {
+            LogUtils.debugLog("You don't have ladder design toggled on, visitors macro won't work (for now).");
+            ConfigHandler.set("visitorsMacro", false);
+            return;
         }
 
         if (ProfitCalculator.getCurrentPurse() < MiscConfig.visitorsMacroMoneyThreshold * 1_000_000) {
@@ -402,7 +409,7 @@ public class VisitorsMacro {
 
                 Pair<Float, Float> rotationToEdge = AngleUtils.getRotation(currentEdge);
                 randomValue = playerY > 85 ? 5 + (float) (Math.random() * 1 - 0.5) : 1 + (float) (Math.random() * 1 - 0.5);
-                if ((Math.abs(mc.thePlayer.rotationYaw - rotationToEdge.getLeft()) > 0.5 || Math.abs(mc.thePlayer.rotationPitch - randomValue) > 0.5) && !rotation.rotating) {
+                if ((Math.abs(mc.thePlayer.rotationYaw - rotationToEdge.getLeft()) > 0.5 || Math.abs(mc.thePlayer.rotationPitch - randomValue) > 0.5) && !rotation.rotating && !aotvTpCooldown.passed()) {
                     rotation.easeTo(rotationToEdge.getLeft(), randomValue, 275 + (int) (Math.random() * 100));
                 }
 
@@ -839,7 +846,8 @@ public class VisitorsMacro {
         BlockPos playerPos = new BlockPos(mc.thePlayer.posX, mc.thePlayer.posY, mc.thePlayer.posZ);
         EnumFacing playerFacing = mc.thePlayer.getHorizontalFacing();
         BlockPos blockInFront = playerPos.offset(playerFacing);
-        Block block = mc.theWorld.getBlockState(blockInFront.up()).getBlock();
+        Block block = mc.theWorld.getBlockState(blockInFront).getBlock();
+        LogUtils.debugLog("Block in front: " + block);
         return mc.thePlayer.onGround &&
                 !block.equals(Blocks.air) &&
                 !(block instanceof BlockSlab) &&

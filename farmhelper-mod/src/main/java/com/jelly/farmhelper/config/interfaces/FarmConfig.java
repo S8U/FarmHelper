@@ -9,4 +9,10 @@ public class FarmConfig {
     public static MacroEnum cropType = MacroEnum.CARROT_NW_WHEAT_POTATO;
     @Config()
     public static FarmEnum farmType = FarmEnum.LAYERED;
+    @Config()
+    public static boolean ladderDesign = false;
+    @Config()
+    public static boolean rotateAfterBack = false;
+    @Config()
+    public static boolean rotateAfterDrop = false;
 }

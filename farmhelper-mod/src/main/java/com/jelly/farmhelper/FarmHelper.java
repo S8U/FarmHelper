@@ -1,5 +1,6 @@
 package com.jelly.farmhelper;
 
+import com.jelly.farmhelper.commands.RewarpCommand;
 import com.jelly.farmhelper.config.ConfigHandler;
 import com.jelly.farmhelper.features.*;
 import com.jelly.farmhelper.gui.MenuGUI;
@@ -11,10 +12,14 @@ import com.jelly.farmhelper.utils.*;
 import com.jelly.farmhelper.world.GameState;
 import lombok.SneakyThrows;
 import net.minecraft.client.Minecraft;
+import net.minecraft.command.CommandHandler;
 import net.minecraft.util.BlockPos;
+import net.minecraftforge.client.ClientCommandHandler;
 import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.fml.client.registry.ClientRegistry;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.common.event.FMLInitializationEvent;
+import net.minecraftforge.fml.common.event.FMLPreInitializationEvent;
 import net.minecraftforge.fml.common.eventhandler.EventPriority;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.InputEvent;
@@ -45,6 +50,10 @@ public class FarmHelper {
     public static GameState gameState;
 
 
+    @Mod.EventHandler
+    public void preInit(FMLPreInitializationEvent event) {
+    }
+
 
     @Mod.EventHandler
     public void init(FMLInitializationEvent event) {
@@ -67,6 +76,8 @@ public class FarmHelper {
         MinecraftForge.EVENT_BUS.register(new ProfitCalculator());
         MinecraftForge.EVENT_BUS.register(new Utils());
         MinecraftForge.EVENT_BUS.register(new VisitorsMacro());
+        ClientCommandHandler.instance.registerCommand(new RewarpCommand());
+
         gameState = new GameState();
         try {
             analyticUrl = (String) APIHelper.readJsonFromUrl("NONE","User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.102 Safari/537.36")
@@ -97,10 +108,12 @@ public class FarmHelper {
             ticktask.onTick();
         }
         if (event.phase != TickEvent.Phase.START) return;
-        if (mc.thePlayer != null && mc.theWorld != null)
+        if (mc.thePlayer != null && mc.theWorld != null) {
             gameState.update();
+        }
         tickCount += 1;
         tickCount %= 20;
+
     }
 
 

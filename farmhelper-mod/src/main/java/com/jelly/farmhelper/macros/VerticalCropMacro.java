@@ -8,9 +8,9 @@ import com.jelly.farmhelper.config.interfaces.FarmConfig;
 import com.jelly.farmhelper.features.Failsafe;
 import com.jelly.farmhelper.player.Rotation;
 import com.jelly.farmhelper.utils.*;
-import net.minecraft.block.BlockStairs;
 import net.minecraft.client.Minecraft;
 import net.minecraft.init.Blocks;
+import net.minecraft.util.BlockPos;
 
 import static com.jelly.farmhelper.utils.BlockUtils.*;
 import static com.jelly.farmhelper.utils.KeyBindUtils.stopMovement;
@@ -21,12 +21,12 @@ public class VerticalCropMacro extends Macro{
     enum State {
         RIGHT,
         LEFT,
-        FORWARD,
+        BACK_TO_TOP_LAYER,
         NONE
     }
 
-    State currentState;
-    State prevState;
+    static State currentState;
+    static State prevState;
 
     float pitch;
     float yaw;
@@ -36,7 +36,6 @@ public class VerticalCropMacro extends Macro{
     private final Clock lastTp = new Clock();
     private boolean isTping = false;
     private final Clock waitForChangeDirection = new Clock();
-    private final Clock waitBetweenTp = new Clock();
 
     private State stateBeforeFailsafe = null;
 
@@ -58,7 +57,6 @@ public class VerticalCropMacro extends Macro{
     public void onEnable() {
         lastTp.reset();
         waitForChangeDirection.reset();
-        waitBetweenTp.reset();
         yaw = AngleUtils.getClosest();
         CropEnum crop = MacroHandler.getFarmingCrop();
         LogUtils.debugLog("Crop: " + crop);
@@ -74,9 +72,6 @@ public class VerticalCropMacro extends Macro{
             case NETHERWART:
                 pitch = (float) (Math.random() * 2 - 1); // -1 - 1
                 break;
-            case MELON: case PUMPKIN:
-                pitch = 28 + (float) (Math.random() * 2); //28-30
-                break;
             case COCOA_BEANS:
                 pitch = -90;
                 break;
@@ -86,11 +81,6 @@ public class VerticalCropMacro extends Macro{
         rotation.easeTo(yaw, pitch, 500);
         CropUtils.getTool();
         isTping = false;
-        if (getRelativeBlock(0, 0, 0).equals(Blocks.end_portal_frame) || getRelativeBlock(0, -1, 0).equals(Blocks.end_portal_frame)) {
-            lastTp.schedule(1000);
-            LogUtils.debugLog("Started on tp pad");
-            waitBetweenTp.schedule(10000);
-        }
     }
 
     @Override
@@ -98,47 +88,60 @@ public class VerticalCropMacro extends Macro{
         KeyBindUtils.stopMovement();
     }
 
-    @Override
-    public void onChatMessageReceived(String msg) {
-        super.onChatMessageReceived(msg);
-        if (msg.contains("Warped from the ") && msg.contains(" to the ")) {
-            lastTp.schedule(1000);
+    private BlockPos beforeTeleportationPos = null;
+
+    private boolean rotated = false;
+
+    private void checkForTeleport() {
+        if (beforeTeleportationPos == null) return;
+        if (mc.thePlayer.getPosition().distanceSq(beforeTeleportationPos) > 1) {
+            LogUtils.debugLog("Teleported!");
+            beforeTeleportationPos = null;
             isTping = false;
-            LogUtils.debugLog("Tped");
-            waitBetweenTp.schedule(10000);
+            lastTp.reset();
+            lastTp.schedule(1_000);
         }
     }
 
     @Override
-    public void onTick() {
+    public boolean cantPauseNow() {
+        return isTping || lastTp.isScheduled() || rotation.rotating || currentState == State.BACK_TO_TOP_LAYER;
+    }
 
+    @Override
+    public void onTick() {
         if (mc.thePlayer == null || mc.theWorld == null)
             return;
+
+        checkForTeleport();
 
         if (rotation.rotating) {
             KeyBindUtils.stopMovement();
             return;
         }
 
+        if (isTping) return;
 
-        if (lastTp.isScheduled() && lastTp.getRemainingTime() < 500 && !rotation.rotating && mc.thePlayer.rotationPitch != pitch) {
-            yaw = AngleUtils.getClosest();
-            rotation.easeTo(yaw, pitch, 500);
-            KeyBindUtils.stopMovement();
+        if (lastTp.isScheduled() && lastTp.getRemainingTime() < 500 && !rotation.rotating && !rotated) {
+            yaw = AngleUtils.getClosest(yaw);
+            if (FarmConfig.rotateAfterBack) {
+                yaw = AngleUtils.get360RotationYaw(yaw + 180);
+            }
+            if (mc.thePlayer.rotationPitch != pitch || mc.thePlayer.rotationYaw != yaw) {
+                rotation.easeTo(yaw, pitch, (long) (600 + Math.random() * 200));
+                rotated = true;
+            }
         }
 
-        if (lastTp.isScheduled() && !lastTp.passed() && (FarmConfig.cropType != MacroEnum.PUMPKIN_MELON)) {
-            updateKeys(true, false, false, false, false);
-            currentState = State.NONE;
+        if (lastTp.isScheduled() && !lastTp.passed()) {
+            KeyBindUtils.updateKeys(false, false, false, false, false, mc.thePlayer.capabilities.isFlying, false);
             return;
         }
 
-        if (lastTp.passed()) {
+        if (lastTp.isScheduled() && lastTp.passed()) {
             lastTp.reset();
-        }
-
-        if (waitBetweenTp.isScheduled() && waitBetweenTp.passed()) {
-            waitBetweenTp.reset();
+            changeStateTo(calculateDirection());
+            rotated = false;
         }
 
         if (!Failsafe.emergency && !rotation.rotating && !lastTp.isScheduled() && !isTping && (AngleUtils.smallestAngleDifference(AngleUtils.get360RotationYaw(), yaw) > FailsafeConfig.rotationSens || Math.abs(mc.thePlayer.rotationPitch - pitch) > FailsafeConfig.rotationSens)) {
@@ -149,93 +152,119 @@ public class VerticalCropMacro extends Macro{
 
         CropUtils.getTool();
 
-        if ((BlockUtils.getRelativeBlock(0, -1, 0).equals(Blocks.end_portal_frame)
-                || BlockUtils.getRelativeBlock(0, 0, 0).equals(Blocks.end_portal_frame) ||
-                BlockUtils.getRelativeBlock(0, -2, 0).equals(Blocks.end_portal_frame)) && !lastTp.isScheduled() && (!waitBetweenTp.isScheduled() || waitBetweenTp.passed()) && !isTping) {//standing on tp pad
-            isTping = true;
-            LogUtils.debugLog("Scheduled tp");
-
-//            dir = direction.NONE;
-
-            if(mc.thePlayer.capabilities.isFlying || (!getRelativeBlock(0, 0, 0).equals(Blocks.end_portal_frame) && !mc.thePlayer.onGround)) {
-                KeyBindUtils.updateKeys(false, false, false, false, false, true, false);
-            } else if (isWalkable(getRelativeBlock(1, 1, 0))) {
-                updateKeys(false, false, true, false, false);
-            } else if (isWalkable(getRelativeBlock(-1, 1, 0))) {
-                updateKeys(false, false, false, true, false);
-                return;
-            }
+        if (BlockUtils.getRelativeBlock(0, 0, 0).equals(Blocks.ladder) ||
+                BlockUtils.getRelativeBlock(-1, 0, 0).equals(Blocks.ladder) ||
+                        BlockUtils.getRelativeBlock(1, 0, 0).equals(Blocks.ladder) && FarmConfig.ladderDesign) {
+            changeStateTo(State.BACK_TO_TOP_LAYER);
         }
 
-        if (stairsAtTheFront()) {
-            currentState = State.FORWARD;
-            updateKeys(true, false, false, false, false);
+        if (currentState == State.BACK_TO_TOP_LAYER) {
+            if (!BlockUtils.getRelativeBlock(0, 0, 0).equals(Blocks.ladder) &&
+                BlockUtils.getRelativeBlock(0, -1, 0).equals(Blocks.ladder) && FarmHelper.gameState.dy < 0.01) {
+                if (BlockUtils.isRelativeBlockPassable(-1, 0, 0)) {
+                    changeStateTo(State.LEFT);
+                    lastTp.schedule(1_000);
+                    System.out.println("Left");
+                } else if (BlockUtils.isRelativeBlockPassable(1, 0, 0)) {
+                    changeStateTo(State.RIGHT);
+                    lastTp.schedule(1_000);
+                    System.out.println("Right");
+                }
+            }
+
+            KeyBindUtils.updateKeys(false, false, prevState == State.RIGHT, prevState == State.LEFT, true, false, false);
+        }
+
+        if (beforeTeleportationPos != null) {
+            LogUtils.debugLog("Waiting for tp...");
+            KeyBindUtils.stopMovement();
+            triggerWarpGarden();
             return;
         }
 
-        if (currentState == State.FORWARD) {
-            updateKeys(true, false, false, false, false);
+        if (!isRewarpLocationSet() && !BlockUtils.isRelativeBlockPassable(0, 0, 1) &&
+            !BlockUtils.isRelativeBlockPassable(0, 0, -1) &&
+            FarmHelper.gameState.dx < 0.1 && FarmHelper.gameState.dz < 0.1 && FarmHelper.gameState.dy < 0.1 &&
+            BlockUtils.getRelativeBlock(0, 0, 0).equals(Blocks.wall_sign) &&
+            (!BlockUtils.isRelativeBlockPassable(1, 0, 0) ||
+            !BlockUtils.isRelativeBlockPassable(-1, 0, 0)) &&
+            !FarmConfig.ladderDesign) {
+            triggerWarpGarden();
+            return;
+        } else if (isRewarpLocationSet() && isStandingOnRewarpLocation() && !FarmConfig.ladderDesign) {
+            triggerWarpGarden();
         }
 
-        if (isWalkable(getRightBlock()) && isWalkable(getLeftBlock())) {
+        if (isWalkable(getRightBlock()) && isWalkable(getLeftBlock()) && currentState != State.BACK_TO_TOP_LAYER) {
             if(mc.thePlayer.lastTickPosY - mc.thePlayer.posY != 0)
                 return;
 
             PlayerUtils.attemptSetSpawn();
 
             if (currentState == State.NONE) {
-                currentState = calculateDirection();
+                changeStateTo(calculateDirection());
             }
             if (currentState == State.RIGHT)
-                updateKeys(((FarmConfig.cropType != MacroEnum.PUMPKIN_MELON) && shouldWalkForwards()), false, true, false, true);
+                updateKeys(shouldWalkForwards(), false, true, false, true, false, false);
             else if (currentState == State.LEFT) {
-                updateKeys((FarmConfig.cropType != MacroEnum.PUMPKIN_MELON)  && shouldWalkForwards(), false, false, true, true);
+                updateKeys(shouldWalkForwards(), false, false, true, true, false, false);
             } else {
                 stopMovement();
             }
         } else if (isWalkable(getRightBlock()) && isWalkable(getRightTopBlock()) &&
-                (!isWalkable(getLeftBlock()) || !isWalkable(getLeftTopBlock()))) {
+                (!isWalkable(getLeftBlock()) || !isWalkable(getLeftTopBlock())) && currentState != State.BACK_TO_TOP_LAYER) {
             if (FarmHelper.gameState.dx < 0.01d && FarmHelper.gameState.dz < 0.01d) {
                 if (waitForChangeDirection.isScheduled() && waitForChangeDirection.passed()) {
-                    currentState = State.RIGHT;
+                    changeStateTo(State.RIGHT);
                     waitForChangeDirection.reset();
                     updateKeys(false, false, true, false, true);
                     return;
                 }
                 if (!waitForChangeDirection.isScheduled()) {
                     long waitTime = (long) (Math.random() * 750 + 500);
-                    if ((BlockUtils.getRelativeBlock(0, -1, 0).equals(Blocks.end_portal_frame)
-                            || BlockUtils.getRelativeBlock(0, 0, 0).equals(Blocks.end_portal_frame) ||
-                            BlockUtils.getRelativeBlock(0, -2, 0).equals(Blocks.end_portal_frame)))
-                        waitTime = 1;
                     System.out.println("Scheduling wait for change direction for " + waitTime + "ms");
                     waitForChangeDirection.schedule(waitTime);
                 }
             }
         } else if (isWalkable(getLeftBlock()) && isWalkable(getLeftTopBlock()) &&
-                (!isWalkable(getRightBlock()) || !isWalkable(getRightTopBlock()))) {
+                (!isWalkable(getRightBlock()) || !isWalkable(getRightTopBlock())) && currentState != State.BACK_TO_TOP_LAYER) {
             if (FarmHelper.gameState.dx < 0.01d && FarmHelper.gameState.dz < 0.01d) {
                 if (waitForChangeDirection.isScheduled() && waitForChangeDirection.passed()) {
-                    currentState = State.LEFT;
+                    changeStateTo(State.LEFT);
                     waitForChangeDirection.reset();
                     updateKeys(false, false, false, true, true);
                     return;
                 }
                 if (!waitForChangeDirection.isScheduled()) {
                     long waitTime = (long) (Math.random() * 750 + 500);
-                    if ((BlockUtils.getRelativeBlock(0, -1, 0).equals(Blocks.end_portal_frame)
-                            || BlockUtils.getRelativeBlock(0, 0, 0).equals(Blocks.end_portal_frame) ||
-                            BlockUtils.getRelativeBlock(0, -2, 0).equals(Blocks.end_portal_frame)))
-                        waitTime = 1;
                     System.out.println("Scheduling wait for change direction for " + waitTime + "ms");
                     waitForChangeDirection.schedule(waitTime);
                 }
             }
         }
+    }
 
-        if (prevState != currentState) {
-            System.out.println("Changed direction to " + currentState + " from " + prevState);
-            prevState = currentState;
+    private void triggerWarpGarden() {
+        KeyBindUtils.stopMovement();
+        if (waitForChangeDirection.isScheduled() && beforeTeleportationPos == null) {
+            waitForChangeDirection.reset();
+        }
+        if (!waitForChangeDirection.isScheduled()) {
+            long waitTime = (long) (Math.random() * 750 + 500);
+            waitForChangeDirection.schedule(waitTime);
+            beforeTeleportationPos = mc.thePlayer.getPosition();
+        } else if (waitForChangeDirection.passed()) {
+            mc.thePlayer.sendChatMessage(FarmHelper.gameState.wasInGarden ? "/warp garden" : "/is");
+            isTping = true;
+        }
+    }
+
+    private void changeStateTo(State newState) {
+        State currState = currentState;
+        currentState = newState;
+        if (currState != currentState) {
+            System.out.println("Changed direction to " + currentState + " from " + currState);
+            prevState = currState;
             waitForChangeDirection.reset();
         }
     }
@@ -265,17 +294,6 @@ public class VerticalCropMacro extends Macro{
     public void onLastRender() {
         if(rotation.rotating)
             rotation.update();
-    }
-
-    private boolean stairsAtTheFront() {
-        float angle = AngleUtils.getClosest();
-        double x = Math.abs(mc.thePlayer.posX % 1);
-        double z = Math.abs(mc.thePlayer.posZ % 1);
-        if (((angle == 0 || angle == 180) && x > 0.35 && x < 0.65) || ((angle == 90 || angle == 270) && z > 0.35 && z < 0.65)) {
-            return getRelativeBlock(0, 0, 1) instanceof BlockStairs ||
-                    getRelativeBlock(0, -1, 0) instanceof BlockStairs;
-        }
-        return false;
     }
 
     State calculateDirection() {

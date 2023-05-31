@@ -3,6 +3,7 @@ package com.jelly.farmhelper.gui.menus;
 import com.jelly.farmhelper.config.ConfigHandler;
 import com.jelly.farmhelper.config.enums.MacroEnum;
 import com.jelly.farmhelper.config.interfaces.FarmConfig;
+import com.jelly.farmhelper.gui.components.Toggle;
 import gg.essential.elementa.UIComponent;
 import gg.essential.elementa.components.UIBlock;
 import gg.essential.elementa.components.UIContainer;
@@ -27,8 +28,12 @@ public class FarmMenu extends UIContainer {
     public static final Color NOT_SELECTED_COLOR = new Color(30, 31, 32);
     public static final Color DISABLED_COLOR = new Color(1, 1, 1);
 
-    public static final List<Integer> FORBIDDEN_SSHAPE_FARMS = Arrays.asList(2, 5, 6);
-    public static final List<Integer> FORBIDDEN_VERTICAL_FARMS = Arrays.asList(1, 3, 4);
+    public static final List<Integer> FORBIDDEN_SSHAPE_FARMS = Arrays.asList(5, 6);
+    public static final List<Integer> FORBIDDEN_VERTICAL_FARMS = Arrays.asList(1, 2, 3, 4);
+
+    public static UIComponent ladderDesign;
+    public static UIComponent rotateAfterBack;
+    public static UIComponent rotateAfterDrop;
 
     public FarmMenu() {
         selector = new UIBlock((new Color(36, 37, 39)))
@@ -60,6 +65,24 @@ public class FarmMenu extends UIContainer {
                 .setTextScale(new PixelConstraint(0.8f))
                 .setChildOf(farmList.get(1));
 
+        rotateAfterBack = new Toggle("Rotate After Back", "rotateAfterBack")
+                .setX(new CenterConstraint())
+                .setY(new PixelConstraint(25, true))
+                .setTextScale(new PixelConstraint(0.3f))
+                .setChildOf(this);
+
+        ladderDesign = new Toggle("Go back with ladders", "ladderDesign")
+                .setX(new CenterConstraint())
+                .setY(new PixelConstraint(5, true))
+                .setTextScale(new PixelConstraint(0.3f))
+                .setChildOf(this);
+
+        rotateAfterDrop = new Toggle("Rotate After Drop", "rotateAfterDrop")
+                .setX(new CenterConstraint())
+                .setY(new PixelConstraint(5, true))
+                .setTextScale(new PixelConstraint(0.3f))
+                .setChildOf(this);
+
         setDisable(FarmConfig.farmType.ordinal());
     }
 
@@ -83,8 +106,9 @@ public class FarmMenu extends UIContainer {
                     cropList.get(0).setColor(SELECTED_COLOR);
                     ((ImageBox) cropList.get(0)).onMouseClick();
                 }
-
             }
+            ladderDesign.hide();
+            rotateAfterDrop.unhide(true);
         // Vertical
         } else if (farmType == 1L) {
             for (UIComponent c : cropList) {
@@ -101,6 +125,8 @@ public class FarmMenu extends UIContainer {
                     ((ImageBox) cropList.get(0)).onMouseClick();
                 }
             }
+            ladderDesign.unhide(true);
+            rotateAfterDrop.hide();
         }
     }
 }
