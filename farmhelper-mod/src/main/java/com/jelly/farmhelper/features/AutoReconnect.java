@@ -41,6 +41,10 @@ public class AutoReconnect {
                 waitTime = 0;
                 try {
                     FMLClientHandler.instance().connectToServer(new GuiMultiplayer(new GuiMainMenu()), new ServerData("bozo", FarmHelper.gameState.serverIP != null ? FarmHelper.gameState.serverIP : "mc.hypixel.net", false));
+
+                    if (MacroHandler.isMacroing) {
+                        MacroHandler.enableCurrentMacro();
+                    }
                 } catch (Exception e) {
                     e.printStackTrace();
                     System.out.println("Failed to reconnect to server!");
