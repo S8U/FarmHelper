@@ -14,6 +14,9 @@ import net.minecraftforge.fml.client.FMLClientHandler;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.TickEvent;
 
+import java.util.Timer;
+import java.util.TimerTask;
+
 public class AutoReconnect {
     private static final Minecraft mc = Minecraft.getMinecraft();
 
@@ -41,10 +44,6 @@ public class AutoReconnect {
                 waitTime = 0;
                 try {
                     FMLClientHandler.instance().connectToServer(new GuiMultiplayer(new GuiMainMenu()), new ServerData("bozo", FarmHelper.gameState.serverIP != null ? FarmHelper.gameState.serverIP : "mc.hypixel.net", false));
-
-                    if (MacroHandler.isMacroing) {
-                        MacroHandler.enableCurrentMacro();
-                    }
                 } catch (Exception e) {
                     e.printStackTrace();
                     System.out.println("Failed to reconnect to server!");
